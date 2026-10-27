@@ -1,5 +1,7 @@
 package com.U100.foj.service.impl;
 
+import com.U100.foj.constant.MqConstant;
+import com.U100.foj.exception.ThrowUtils;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -23,6 +25,7 @@ import com.U100.foj.utils.SqlUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -49,6 +52,14 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
     @Resource
     @Lazy
     private JudgeService judgeService;
+
+    @Resource
+    private RabbitTemplate rabbitTemplate;
+
+// 1. 提交记录落库后，先把状态置为「判题中」并 update
+
+
+// 3. 接口直接返回 submitId → 前端立刻收到「判题中」
 
     /**
      * 提交题目
@@ -89,7 +100,14 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         Long questionSubmitId = questionSubmit.getId();
         // 执行判题服务
         CompletableFuture.runAsync(() -> {
-            judgeService.doJudge(questionSubmitId);
+//            judgeService.doJudge(questionSubmitId);
+            boolean result = this.save(questionSubmit);
+            ThrowUtils.throwIf(!result, ErrorCode.SYSTEM_ERROR, "数据插入失败");
+
+// MQ 异步判题：发送 submitId 到判题队列，由消费者调用 doJudge
+            rabbitTemplate.convertAndSend(MqConstant.JUDGE_EXCHANGE,
+                    MqConstant.JUDGE_ROUTING_KEY,
+                    String.valueOf(questionSubmitId));
         });
         return questionSubmitId;
     }

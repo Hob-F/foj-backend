@@ -31,6 +31,17 @@ spring:
     host: localhost
     port: 6379
     timeout: 5000
+  rabbitmq:                    # ← 从这里开始是新加的，和 redis: 平级
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          max-attempts: 3
 #    password: 123456
   # Elasticsearch 配置
   # todo 需替换配置，然后取消注释
